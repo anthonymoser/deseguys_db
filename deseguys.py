@@ -167,7 +167,7 @@ def load_files():
 
 def parse_records(data:list, schema:RecordMap):
     
-    for row in tqdm(data):
+    for row in data:
         try:
             address_id = None 
             name_id = None 
