@@ -10,4 +10,4 @@ combined.db : build_db.py data.zip
 	python build_db.py
 
 data.zip :
-	@curl -o data.zip --remote-name https://storage.googleapis.com/pdt_central/deseguys/test_data.zip
+	@curl -o data.zip --remote-name https://storage.googleapis.com/pdt_central/deseguys/data.zip
