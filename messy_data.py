@@ -124,7 +124,7 @@ def extract_names_and_addresses(df, index_field, extract_field, type):
     print(index_field)
     records = []
     errors = []
-    for row in tqdm(df.to_dict('records')):
+    for row in df.to_dict('records'):
         if pd.notna(row[extract_field]):
             try:
                 record = {
