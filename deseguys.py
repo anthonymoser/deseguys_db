@@ -167,12 +167,14 @@ def load_files():
 
 def parse_records(data:list, schema:RecordMap):
     
-    for row in tqdm(data):
+    for row in data:
         try:
             address_id = None 
             name_id = None 
 
             row_name = Name( name = clean_name(row[schema.name.name]) if schema.clean_data is True else row[schema.name.name])
+            row_name.name = row_name.name.upper()
+            
             name_id = get_name_id(row_name)
             if name_id == row_name.id:
                 names.append(row_name)

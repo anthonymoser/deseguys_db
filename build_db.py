@@ -1,101 +1,140 @@
-from deseguys import * 
-from campaigns import data_sources as campaign_ds
-from businesses import data_sources as business_ds 
-from contracts import data_sources as contracts_ds 
-import sqlite3
-import json 
-import pandas as pd 
+from parse_csv import parse
+from csv_schemas import schemas
+import glob
+import multiprocessing
+# from google.cloud import storage
+# import google.auth
+import zipfile
+import duckdb as d
+from prep_csvs import file_prep
+# storage_client = storage.Client()
 
-conn = sqlite3.connect('combined.db')
-cur = conn.cursor() 
+# key = 'app engine service acct linear-enigma-307504-40cd0b800f9b.json'
+# credentials, project = google.auth.load_credentials_from_file(
+#     filename=key,
+#     scopes=[
+#         "https://www.googleapis.com/auth/drive",
+#         "https://www.googleapis.com/auth/cloud-platform",
+#     ]
+# )
+# storage_client = storage.Client(credentials=credentials, project=project)
 
-
-def insert_records(): 
-    
-    global addresses, entities, names, links 
-    address_sql = "INSERT INTO addresses(id, street, city, state, postal_code) values (:id, :street, :city, :state, :postal_code);"
-    cur.executemany(address_sql, [ a.to_dict() for a in addresses ])
-    
-    name_sql = "INSERT INTO names(id, name) VALUES (:id, :name)"
-    cur.executemany(name_sql, [ n.to_dict() for n in names ])
-
-    inserts = [e.to_dict() for e in entities]
-    for e in inserts: 
-        e['details'] = json.dumps(e['details'])
-    
-    entity_sql = "INSERT INTO entities(id, type, name_id, address_id, index_type, index_id, details, is_primary) VALUES (:id, :type, :name_id, :address_id, :index_type, :index_id, :details, :is_primary)"
-    cur.executemany(entity_sql, inserts)
-
-    inserts = [ l.to_dict() for l in links ]
-    for link in inserts:
-        link['details'] = json.dumps(link['details'])
-    
-    link_sql = "INSERT INTO links(id, source_entity_id, type, target_entity_id, details) VALUES (:id, :source_entity_id, :type, :target_entity_id, :details)"
-    cur.executemany(link_sql, inserts)
-    conn.commit()
-    
-
-
-sql = {
-    "addresses" : """ 
-        CREATE TABLE addresses(
-            id VARCHAR PRIMARY KEY,
-            street VARCHAR, 
-            city VARCHAR, 
-            state VARCHAR,
-            postal_code VARCHAR
-        ); """, 
-    
-    "names": """
-        CREATE TABLE names(
-            id VARCHAR PRIMARY KEY,
-            name VARCHAR
-        ); """, 
+# def upload_blob(bucket_name, source_file_name, destination_blob_name):
+#     """Uploads a file to the bucket."""
         
-    "entities": """
-        CREATE TABLE entities(
-            id VARCHAR PRIMARY KEY,
-            type VARCHAR,
-            name_id VARCHAR,
-            address_id VARCHAR,
-            index_type VARCHAR,
-            index_id VARCHAR,
-			details VARCHAR,
-            is_primary int,
-            FOREIGN KEY(name_id) REFERENCES names(id),
-            FOREIGN KEY(address_id) REFERENCES addresses(id)
-        );
-        """,
+#     bucket = storage_client.bucket(bucket_name)
+#     blob = bucket.blob(destination_blob_name)
+#     blob.upload_from_filename(source_file_name)
+
+#     print(f"File {source_file_name} uploaded to {destination_blob_name}.")
+
+# def download_blob(bucket_name, source_blob_name, destination_file_name):
+#     """Downloads a blob from the bucket."""
+
+#     bucket = storage_client.bucket(bucket_name)
+#     blob = bucket.blob(source_blob_name)
+#     blob.download_to_filename(destination_file_name)
+
+#     print(
+#         "Downloaded storage object {} from bucket {} to local file {}.".format(
+#             source_blob_name, bucket_name, destination_file_name
+#         )
+#     )
+
+def get_file_list(filepath:str) ->list:
+    return sorted(glob.glob(filepath))
+
+def process_csvs():
+    exports = get_file_list('csv_export/*.csv')
+    p = multiprocessing.Pool()
+    for s in schemas:
+        filename = s['filename']
+        if s.get('extract_field', None) is not None:
+            export_path = f"{filename[:-4]}_{s['link_type']}.csv"
+        else:
+            export_path = f"{filename[:-4]}_{s['entity_type']}.csv"
         
-    "links": """
-        CREATE TABLE links(
-            id VARCHAR PRIMARY KEY,
-            source_entity_id VARCHAR, 
-            type VARCHAR, 
-            target_entity_id VARCHAR, 
-            details VARCHAR
+        if export_path not in exports:
+            print("processing ", filename)
+            p.apply_async(parse, [s]) 
+
+    p.close()
+    p.join() # Wait for all child processes to close.
+
+def create_table():
+    table_sql = """ 
+    CREATE TABLE IF NOT EXISTS entities(
+        entity_type VARCHAR,
+        link_type VARCHAR,
+        name VARCHAR,
+        street VARCHAR,
+        city VARCHAR,
+        state VARCHAR,
+        postal_code VARCHAR,
+        details VARCHAR,
+        index_type VARCHAR,
+        index_value VARCHAR, 
+        is_primary TINYINT
         )
-    """ 
-}
+    """
+    duck.sql(table_sql)
 
-for table in sql: 
-    cur.execute(sql[table])
-    conn.commit()
-print("db initialized")
+def load_exports(exports:list):
+    for e in exports:
+        insert_sql = f"""
+            INSERT INTO entities
+            SELECT 
+                entity_type, 
+                link_type, 
+                name, 
+                street, 
+                city, 
+                state, 
+                postal_code, 
+                details, 
+                index_type, 
+                index_value, 
+                is_primary
+            FROM 
+                '{e}'
+            """
+        duck.sql(insert_sql)
 
-for ds in business_ds: 
-    print(ds)
-    business_ds[ds].load_df()
-    business_ds[ds].parse_record_maps()
+def export_csv(filename:str):
+    export_sql = f"COPY (SELECT * FROM entities) TO '{filename}' (HEADER, DELIMITER ',');"
+    duck.sql(export_sql)
     
-for ds in campaign_ds:
-    print(ds) 
-    campaign_ds[ds].load_df()
-    campaign_ds[ds].parse_record_maps()
+def main():   
+    global duck  
+    # print("Downloading source data")
+    # download_blob('pdt_central', 'deseguys/csv_source.zip', 'csv_source.zip')
+    # with zipfile.ZipFile("csv_source.zip", mode="r") as archive:
+        # archive.extractall(".")
+    # print("data extracted")
+    
+    prepped = [f.split('/').pop() for f in get_file_list('csv_prep/*.csv')]
+    for f in file_prep:
+        if f not in prepped:
+            print(f"prepping {f}")
+            file_prep[f](f)
+    print("files prepped")
+      
+    process_csvs()
+    exports = get_file_list('csv_export/*.csv')
+    
+    print("initializing db")
+    duck = d.connect('duck.duckdb')    
+    create_table()
+    load_exports(exports)
+    export_csv('entities.csv')
 
-for ds in contracts_ds:
-    print(ds)
-    contracts_ds[ds].load_df()
-    contracts_ds[ds].parse_record_maps()
+    # with zipfile.ZipFile("combined.zip", mode="w") as archive:
+    #     archive.write("duck.duckdb")
+    #     archive.write("duck.duckdb.wal")
+    #     archive.write("entities.csv")
+    # print("db zipped")    
 
-insert_records()
+    # upload_blob('pdt_central', 'combined.zip', 'deseguys/combined.zip')
+
+if __name__ == '__main__':
+    main()
