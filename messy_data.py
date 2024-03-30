@@ -36,11 +36,12 @@ def clean_name(name):
                     constructed.append(p[0].replace('.', '').replace(',', ''))
                     included.append(p[1])
         if 'GivenName' in included and 'Surname' in included:
-            return ' '.join(constructed)
+            return ' '.join(constructed).upper()
         else:
-            return name
+            return name.upper()
     except Exception as e:
-        return name 
+        if name is not None:
+            return name.upper()
         
 
 def clean_street(raw:str):
@@ -61,13 +62,14 @@ def clean_street(raw:str):
                 label += f" {normalized['address_line_2']}"
             return label
         else:
-            return raw
+            return raw.upper()
     except Exception as e:
         # print(e)
-        return raw     
+        if raw is not None:
+            return raw.upper()    
     
             
-def extract_name_and_address(raw:str):
+def extract_name_and_address(raw:str)->dict:
     excluded = ["INVOLUNTARY", "VACANT", "VACATED", "SOLE OFFICER", "None", "SAME ", "REVOKED ", " DISSOLUTION", "UNACCEPTABLE ", "MERGED ", "WITHDRAWN"]
     try:
         for e in excluded: 
@@ -108,7 +110,7 @@ def extract_name_and_address(raw:str):
             record['street'] = mostly_street
         if record['name'] is None: 
             return {
-                "name": raw, 
+                "name": raw.upper(), 
                 "city": None, 
                 "postal_code": None, 
                 "state": None

@@ -2,12 +2,13 @@
 
 all : combined.zip
 
-combined.zip : combined.db
+combined.zip : duck.duckdb duck.duckdb.wal entities.csv 
 	zip $@ $^
 
-combined.db : build_db.py data.zip
-	unzip data.zip
+combined.db : build_db.py csv_source.zip
+	unzip csv_source.zip
 	python build_db.py
 
-data.zip :
-	@curl -o data.zip --remote-name https://storage.googleapis.com/pdt_central/deseguys/data.zip
+csv_source.zip :
+	@curl --remote-name https://storage.googleapis.com/pdt_central/deseguys/csv_source.zip
+

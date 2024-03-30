@@ -6,6 +6,7 @@ charset-normalizer==3.3.2
 click==8.1.7
 decorator==5.1.1
 doublemetaphone==1.1
+duckdb==0.10.1
 future==1.0.0
 fuzzywuzzy==0.18.0
 geocoder==1.38.1
