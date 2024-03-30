@@ -11,3 +11,4 @@ combined.db : build_db.py csv_source.zip
 
 csv_source.zip :
 	@curl --remote-name https://storage.googleapis.com/pdt_central/deseguys/csv_source.zip
+
