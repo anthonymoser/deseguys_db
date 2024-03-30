@@ -2,8 +2,8 @@
 
 all : combined.zip
 
-combined.zip : duck.duckdb duck.duckdb.wal entities.csv 
-	zip $@ $^
+combined.zip : 
+	zip duck.duckdb duck.duckdb.wal entities.csv
 
 combined.db : build_db.py csv_source.zip
 	unzip csv_source.zip
